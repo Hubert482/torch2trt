@@ -500,10 +500,7 @@ def torch2trt(module,
     kwargs.update(locals())
     kwargs.pop('kwargs')
 
-    inputs_in = inputs
-
     # copy inputs to avoid modifications to source data
-    inputs = [tensor.clone()[0:1] for tensor in inputs]  # only run single entry
 
     logger = trt.Logger(log_level)
     builder = trt.Builder(logger)
@@ -538,14 +535,14 @@ def torch2trt(module,
         with ConversionContext(network, torch2trt_kwargs=kwargs) as ctx:
 
             ctx.add_inputs(inputs, input_names)
-
+            del outputs
             outputs = module(*inputs)
 
             if not isinstance(outputs, tuple) and not isinstance(outputs, list):
                 outputs = (outputs,)
             ctx.mark_outputs(outputs, output_names)
 
-    builder.max_workspace_size = max_workspace_size
+    builder.max_workspace_size = 1<<30
     builder.fp16_mode = fp16_mode
     builder.max_batch_size = max_batch_size
     builder.strict_type_constraints = strict_type_constraints
@@ -562,13 +559,13 @@ def torch2trt(module,
         builder.int8_calibrator = DatasetCalibrator(
             inputs, int8_calib_dataset, batch_size=int8_calib_batch_size, algorithm=int8_calib_algorithm
         )
-
+    
     engine = builder.build_cuda_engine(network)
-
+    del network
     module_trt = TRTModule(engine, input_names, output_names)
 
-    if keep_network:
-        module_trt.network = network
+    #if keep_network:
+     #   module_trt.network = network
 
     return module_trt
 
